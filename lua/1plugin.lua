@@ -3,6 +3,7 @@ local M = {}
 -- nvim --cmd "set rtp+=." /path/to/file
 M.setup = function()
   print('plugin setup')
+  vim.keymap.set('n', '<localleader>r', M.runcursor, {noremap = true})
 end
 
 -- TODO: test
@@ -42,8 +43,9 @@ M.runsmt = function()
   })
 end
 
-M.runcode = function()
-  local query_string = '((ranged_verbatim_tag (tag_parameters ((tag_param) @tag (#match? @tag "fennel"))) content: (ranged_verbatim_tag_content) @content) @block)'
+M.runfile = function()
+  local query_string =
+    '((ranged_verbatim_tag (tag_parameters ((tag_param) @tag (#match? @tag "fennel"))) content: (ranged_verbatim_tag_content) @content) @block)'
   local parser = require('nvim-treesitter.parsers').get_parser()
   local ok, query = pcall(vim.treesitter.query.parse, parser:lang(), query_string)
   if not ok then
@@ -55,30 +57,54 @@ M.runcode = function()
     print(id, node, metadata)
     if node and node:type() == 'ranged_verbatim_tag_content' then
       local capture = vim.treesitter.get_node_text(node, 0)
-      for line in capture:gmatch("([^\n]*)\n?") do
-        line = line:gsub("^%s+", ""):gsub("%s+$", "")
-        if line ~= "" then
+      for line in capture:gmatch('([^\n]*)\n?') do
+        line = line:gsub('^%s+', ''):gsub('%s+$', '')
+        if line ~= '' then
           M.replit(line)
         end
       end
     end
   end
+end
 
+M.runcursor = function()
+  local node = vim.treesitter.get_node()
+  if node ~= nil then
+    local runit = false
+    for cnode in node:iter_children() do
+      print(cnode)
+      if cnode and cnode:type() == 'tag_parameters' then
+        local capture = vim.treesitter.get_node_text(cnode, 0)
+        if capture == 'fennel' then
+          runit = true
+        end
+      end
+      if cnode and cnode:type() == 'ranged_verbatim_tag_content' and runit then
+        local capture = vim.treesitter.get_node_text(cnode, 0)
+        for line in capture:gmatch('([^\n]*)\n?') do
+          line = line:gsub('^%s+', ''):gsub('%s+$', '')
+          if line ~= '' then
+            M.replit(line)
+          end
+        end
+      end
+    end
+  end
 end
 
 M.replit = function(code)
-  local eval = require("conjure.eval")
-  local client = require("conjure.client")
-  local text = require("conjure.text")
+  local eval = require('conjure.eval')
+  local client = require('conjure.client')
+  local text = require('conjure.text')
 
-  client["with-filetype"]("fennel", eval["eval-str"], {
-    origin = "my-awesome-plugin",
+  client['with-filetype']('fennel', eval['eval-str'], {
+    origin = 'my-awesome-plugin',
     code = code, -- Use the captured body as the code to be evaluated
-    ["on-result"] = function (r)
-      local clean = text["strip-ansi-escape-sequences"](r)
-      print("RESULT:", r)
-      print("CLEANED:", clean)
-    end
+    ['on-result'] = function(r)
+      local clean = text['strip-ansi-escape-sequences'](r)
+      print('RESULT:', r)
+      print('CLEANED:', clean)
+    end,
   })
 end
 return M
